@@ -208,7 +208,7 @@ if __name__ == "__main__":
 
     # Use the modified dataset
     dataset = ImageDataset(low_res_dir="dataset/low_res", high_res_dir="dataset/high_res", transform=transform)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     generator = Generator()
