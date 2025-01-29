@@ -78,12 +78,17 @@ class Discriminator(nn.Module):
         self.model = nn.Sequential(
             *block(in_channels, 64, normalize=False),
             *block(64, 128),
-            *block(128, 256),
-            nn.Conv2d(256, 1, 3, stride=1, padding=1)
+            *block(128, 256)
         )
 
-    def forward(self, img):
-        return self.model(img)
+        self.final_layer = nn.Conv2d(256, 1, 3, stride=1, padding=1)  # Final classification layer
+
+    def forward(self, img, return_features=False):
+        features = self.model(img)
+        out = self.final_layer(features)
+        if return_features:
+            return out, features  # Return both the final output and intermediate feature maps
+        return out
 
 # Sobel Loss
 class SobelLoss(nn.Module):
@@ -135,10 +140,12 @@ class PerceptualLoss(nn.Module):
         return F.mse_loss(sr_features, hr_features)
 
 # Training function with validation
-def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs, optimizer_G, optimizer_D, criterion_content, criterion_perceptual, criterion_sobel, device):
+def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs, optimizer_G, optimizer_D, 
+          criterion_content, criterion_perceptual, criterion_sobel, device):
+
     generator.to(device)
     discriminator.to(device)
-    
+
     g_losses = []
     d_losses = []
     val_losses = []
@@ -150,27 +157,34 @@ def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs
         # Training loop
         generator.train()
         discriminator.train()
-        
+
         for i, (low_res_image, high_res_image) in enumerate(train_dataloader):
             low_res_image = low_res_image.to(device)
             high_res_image = high_res_image.to(device)
 
-            # Generate output from the generator using the low-res image
+            # Generate super-resolved image
             sr_image = generator(low_res_image)
 
-            # Calculate content loss, perceptual loss, and sobel loss
+            # Feature Matching: Extract features from real and fake images
+            real_output, real_features = discriminator(high_res_image, return_features=True)
+            fake_output, fake_features = discriminator(sr_image.detach(), return_features=True)
+
+            # Compute Generator Loss
             optimizer_G.zero_grad()
             content_loss = criterion_content(sr_image, high_res_image)
             perceptual_loss = criterion_perceptual(sr_image, high_res_image)
             sobel_loss = criterion_sobel(sr_image, high_res_image)
-            g_loss = content_loss + perceptual_loss + sobel_loss
+
+            # **Feature Matching Loss (L1 loss between discriminator feature maps)**
+            feature_loss = F.l1_loss(fake_features, real_features.detach())
+
+            # Total Generator Loss
+            g_loss = content_loss + 0.1*perceptual_loss + 0.5*sobel_loss + (0.1 * feature_loss)
             g_loss.backward()
             optimizer_G.step()
 
-            # Update discriminator
+            # Update Discriminator
             optimizer_D.zero_grad()
-            real_output = discriminator(high_res_image)
-            fake_output = discriminator(sr_image.detach())  # Detach generator output
             d_loss = F.binary_cross_entropy_with_logits(real_output, torch.ones_like(real_output)) + \
                      F.binary_cross_entropy_with_logits(fake_output, torch.zeros_like(fake_output))
             d_loss.backward()
@@ -182,13 +196,12 @@ def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs
             if i % 10 == 0:
                 print(f"Epoch {epoch}/{num_epochs}, Step {i}, G Loss: {g_loss.item()}, D Loss: {d_loss.item()}")
 
-        # Average losses for the epoch
+        # Save losses
         g_losses.append(epoch_g_loss / len(train_dataloader))
         d_losses.append(epoch_d_loss / len(train_dataloader))
 
-        # Validation phase
+        # Validation loop
         generator.eval()
-        discriminator.eval()
         val_loss = 0.0
         with torch.no_grad():
             for low_res_image, high_res_image in val_dataloader:
@@ -199,16 +212,17 @@ def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs
                 content_loss = criterion_content(sr_image, high_res_image)
                 perceptual_loss = criterion_perceptual(sr_image, high_res_image)
                 sobel_loss = criterion_sobel(sr_image, high_res_image)
+
                 val_loss += content_loss.item() + perceptual_loss.item() + sobel_loss.item()
 
         val_losses.append(val_loss / len(val_dataloader))
         print(f"Epoch {epoch}/{num_epochs}, Validation Loss: {val_losses[-1]}")
 
-        # Save model checkpoint after each epoch
+        # Save model checkpoints
         torch.save(generator.state_dict(), f"generator_epoch_{epoch}.pth")
         torch.save(discriminator.state_dict(), f"discriminator_epoch_{epoch}.pth")
 
-    # Plot the loss vs. epoch graph for training and validation
+    # Plot loss curve
     plt.figure(figsize=(10, 5))
     plt.plot(range(num_epochs), g_losses, label="Generator Loss", color="b")
     plt.plot(range(num_epochs), d_losses, label="Discriminator Loss", color="r")
@@ -220,6 +234,7 @@ def train(generator, discriminator, train_dataloader, val_dataloader, num_epochs
     plt.grid(True)
     plt.savefig('loss_plot.png')
     plt.show()
+
 
 # Testing function after training
 def test(generator, test_dataloader, device):
@@ -253,9 +268,9 @@ if __name__ == "__main__":
     test_size = len(dataset) - train_size - val_size
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
 
-    train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False)
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=8, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     generator = Generator()
@@ -267,7 +282,7 @@ if __name__ == "__main__":
         generator = nn.DataParallel(generator)
         discriminator = nn.DataParallel(discriminator)
 
-    optimizer_G = optim.Adam(generator.parameters(), lr=0.00001)
+    optimizer_G = optim.Adam(generator.parameters(), lr=0.0001)
     optimizer_D = optim.Adam(discriminator.parameters(), lr=0.00001)
 
     vgg = models.vgg19(pretrained=True).to(device)
