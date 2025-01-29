@@ -52,7 +52,7 @@ class RRDB(nn.Module):
 
 # Generator
 class Generator(nn.Module):
-    def __init__(self, in_channels=1, num_rrdb=3):
+    def __init__(self, in_channels=1, num_rrdb=13):
         super(Generator, self).__init__()
         self.initial_conv = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
         self.rrdb_blocks = nn.Sequential(*[RRDB(64) for _ in range(num_rrdb)])
