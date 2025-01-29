@@ -52,7 +52,7 @@ class RRDB(nn.Module):
 
 # Generator
 class Generator(nn.Module):
-    def __init__(self, in_channels=1, num_rrdb=23):
+    def __init__(self, in_channels=1, num_rrdb=3):
         super(Generator, self).__init__()
         self.initial_conv = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
         self.rrdb_blocks = nn.Sequential(*[RRDB(64) for _ in range(num_rrdb)])
@@ -79,8 +79,7 @@ class Discriminator(nn.Module):
             *block(in_channels, 64, normalize=False),
             *block(64, 128),
             *block(128, 256),
-            *block(256, 512),
-            nn.Conv2d(512, 1, 3, stride=1, padding=1)
+            nn.Conv2d(256, 1, 3, stride=1, padding=1)
         )
 
     def forward(self, img):
