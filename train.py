@@ -92,12 +92,12 @@ model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
               loss="binary_crossentropy",
               metrics=["accuracy"])
 
-# Define checkpoint callback
 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    "checkpoints/epoch_{epoch:02d}.h5",  # Save model for each epoch
+    "checkpoints/epoch_{epoch:02d}.weights.h5",  # Ensure filename ends with .weights.h5
     save_weights_only=True,  # Save only weights
     save_freq='epoch'  # Save after each epoch
 )
+
 
 # Train the model with checkpointing
 history = model.fit(train_dataset, validation_data=val_dataset, epochs=EPOCHS, callbacks=[checkpoint_callback,  LossLoggingCallback()])
