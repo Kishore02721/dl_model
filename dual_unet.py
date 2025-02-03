@@ -11,8 +11,9 @@ def encoder_block(inputs, num_filters):
 def decoder_block(inputs, skip1, skip2, num_filters, merge_mode='concat'):
     x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding='same')(inputs)
 
-    skip1 = tf.image.resize(skip1, size=(x.shape[1], x.shape[2]))  
-    skip2 = tf.image.resize(skip2, size=(x.shape[1], x.shape[2]))
+    # Use UpSampling2D for resizing, as it's compatible with Keras tensors
+    skip1 = tf.keras.layers.UpSampling2D(size=(2, 2))(skip1)
+    skip2 = tf.keras.layers.UpSampling2D(size=(2, 2))(skip2)
 
     if merge_mode == 'concat':
         merged_skip = tf.keras.layers.Concatenate()([skip1, skip2])
@@ -20,12 +21,14 @@ def decoder_block(inputs, skip1, skip2, num_filters, merge_mode='concat'):
         merged_skip = tf.keras.layers.Subtract()([skip1, skip2])
     else:
         raise ValueError("merge_mode should be 'concat', 'diff', or 'multiply'")
+    
     x = tf.keras.layers.Concatenate()([x, merged_skip])
     x = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
     x = tf.keras.layers.Activation('relu')(x)
     x = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
     x = tf.keras.layers.Activation('relu')(x)
     return x
+
 
 def unet_with_two_encoders(input_shape=(256, 256, 1), num_classes=1):
     original_image = tf.keras.layers.Input(input_shape, name="original_image")
