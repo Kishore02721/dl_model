@@ -37,21 +37,18 @@ def unet_with_two_encoders(input_shape=(256, 256, 1), num_classes=1):
     s1 = encoder_block(original_image, 64)
     s2 = encoder_block(s1, 128)
     s3 = encoder_block(s2, 256)
-    s4 = encoder_block(s3, 512)
     
     t1 = encoder_block(inspected_image, 64)
     t2 = encoder_block(t1, 128)
     t3 = encoder_block(t2, 256)
-    t4 = encoder_block(t3, 512)
     
     # Ensure concatenation is done inside a layer, not a TensorFlow function
-    concat_input = tf.keras.layers.Concatenate(axis=-1)([s4, t4])  # Concatenate encoders' outputs
-    b1 = tf.keras.layers.Conv2D(1024, 3, padding='same')(concat_input)  # Apply Conv2D
+    concat_input = tf.keras.layers.Concatenate(axis=-1)([s3, t3])  # Concatenate encoders' outputs
+    b1 = tf.keras.layers.Conv2D(512, 3, padding='same')(concat_input)  # Apply Conv2D
     b1 = tf.keras.layers.Activation('relu')(b1)
-    b1 = tf.keras.layers.Conv2D(1024, 3, padding='same')(b1)
+    b1 = tf.keras.layers.Conv2D(512, 3, padding='same')(b1)
     b1 = tf.keras.layers.Activation('relu')(b1)
     
-    d1 = decoder_block(b1, s4, t4, 512, merge_mode='concat')
     d2 = decoder_block(d1, s3, t3, 256, merge_mode='concat')
     d3 = decoder_block(d2, s2, t2, 128, merge_mode='concat')
     d4 = decoder_block(d3, s1, t1, 64, merge_mode='concat')
