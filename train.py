@@ -8,7 +8,7 @@ from dual_unet import unet_with_two_encoders
 
 # Define image size and batch size
 IMAGE_SIZE = (256, 256)
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 EPOCHS = 20
 
 # Dataset Paths
