@@ -49,7 +49,7 @@ def unet_with_two_encoders(input_shape=(256, 256, 1), num_classes=1):
     b1 = tf.keras.layers.Conv2D(512, 3, padding='same')(b1)
     b1 = tf.keras.layers.Activation('relu')(b1)
     
-    d2 = decoder_block(d1, s3, t3, 256, merge_mode='concat')
+    d2 = decoder_block(b1, s3, t3, 256, merge_mode='concat')
     d3 = decoder_block(d2, s2, t2, 128, merge_mode='concat')
     d4 = decoder_block(d3, s1, t1, 64, merge_mode='concat')
 
